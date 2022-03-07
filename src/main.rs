@@ -1,24 +1,35 @@
-/*
- * Copyright (c) Facebook, Inc. and its affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
-mod commands;
-
 use std::{collections::HashSet, env, sync::Arc};
 
 use commands::{help::*};
 use serenity::{
     async_trait,
-    client::{bridge::gateway::ShardManager, validate_token},
-    framework::{standard::macros::group, StandardFramework},
+    Client,
+    client::{
+        bridge::gateway::ShardManager,
+        validate_token,
+        EventHandler
+    },
+    framework::{
+        standard::macros::{
+            group,
+            hook,
+        },
+        StandardFramework
+    },
     http::Http,
-    model::{event::ResumedEvent, gateway::Ready},
-    prelude::*,
+    model::{
+        channel::Message,
+        event::ResumedEvent,
+        gateway::Ready,
+    },
+    prelude::{
+        Context,
+        Mutex,
+        TypeMapKey,
+    },
 };
+use tracing::{error, info, debug, instrument};
 
-use tracing::{error, info};
 
 pub struct ShardManagerContainer;
 
@@ -34,8 +45,9 @@ impl EventHandler for Handler {
         info!("Connected as {}!", ready.user.name);
     }
 
-    async fn resume(&self, _: Context, _: ResumedEvent) {
-        info!("Resumed");
+    #[instrument(skip(self, _ctx))]
+    async fn resume(&self, _ctx: Context, resume: ResumedEvent) {
+        debug!("Resumed; trace: {:?}", resume.trace);
     }
 }
 
@@ -43,7 +55,15 @@ impl EventHandler for Handler {
 #[commands(help)]
 struct General;
 
+#[hook]
+#[instrument]
+async fn before(_: &Context, msg: &Message, command_name: &str) -> bool {
+    info!("Got command '{}' by user '{}'", command_name, msg.author.name);
+    true
+}
+
 #[tokio::main]
+#[instrument]
 async fn main() {
     // load .env file
     dotenv::dotenv().expect("Failed to load .env file");
@@ -73,8 +93,9 @@ async fn main() {
     let framework = StandardFramework::new()
         .configure(
             |c| c.owners(owners)
-            .prefix("mr!")
+            .prefix("mr~")
         )
+        .before(before)
         .group(&GENERAL_GROUP);
 
     let mut client = Client::builder(&token)

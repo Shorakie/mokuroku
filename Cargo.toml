@@ -1,18 +1,33 @@
 [package]
 name = "mokuroku"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Shorakie <mhmdamin.jafari@gmail.com>"]
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+description = "A Discord anime watch list bot built in Rust"
+repository = "https://github.com/shorakie/mokuroku"
+license = "GPL-3.0"
+keywords = ["discord", "anime-bot", "watch-list", "rust"]
 
 [dependencies]
 mongodb = "2.1.0"
 dotenv = "0.15"
 tracing = "0.1.31"
 tracing-subscriber = "0.3.9"
-serenity = "0.10"
+reqwest = "0.11.9"
+serde_json = "1.0.79"
+html2md = "0.2"
+regex = "1.5"
+lazy_static = "1.4"
+chrono = "0.4"
 
 [dependencies.tokio]
 version = "1.0"
 features = ["macros", "signal", "rt-multi-thread"]
+
+[dependencies.serenity]
+version = "0.10"
+features = ["collector"]
+
+[dependencies.bson]
+version = "2.1"
+features = ["chrono-0_4"]
