@@ -1,6 +1,4 @@
 use std::{collections::HashSet, env, sync::Arc};
-
-use commands::{help::*};
 use serenity::{
     async_trait,
     Client,
@@ -30,6 +28,7 @@ use serenity::{
 };
 use tracing::{error, info, debug, instrument};
 
+use mokuroku::commands::{help::*, anime::*};
 
 pub struct ShardManagerContainer;
 
@@ -52,7 +51,7 @@ impl EventHandler for Handler {
 }
 
 #[group]
-#[commands(help)]
+#[commands(help, anime, watching, suggesting, finished)]
 struct General;
 
 #[hook]
