@@ -6,36 +6,33 @@ edition = "2018"
 description = "A Discord anime watch list bot built in Rust"
 repository = "https://github.com/shorakie/mokuroku"
 license = "GPL-3.0"
-keywords = ["discord", "anime-bot", "watch-list", "rust"]
+keywords = ["discord", "bot", "anime", "watch-list", "serenity"]
 
 [dependencies]
-mongodb = "2.1.0"
+mongodm = "0.8"
 dotenv = "0.15"
 tracing = "0.1.31"
 tracing-subscriber = "0.3.9"
 serde_json = "1.0"
 html2md = "0.2"
-regex = "1.5"
-lazy_static = "1.4"
 chrono = "0.4"
 thiserror = "1.0"
+reqwest = "0.11"
+anyhow = "1.0"
+liquid = "0.26"
 
 [dependencies.tokio]
-version = "1.0"
+version = "1"
 features = ["macros", "signal", "rt-multi-thread"]
 
 [dependencies.serenity]
-version = "0.10"
+version = "0.11"
 features = ["collector"]
-
-[dependencies.bson]
-version = "2.1"
-features = ["chrono-0_4"]
 
 [dependencies.serde]
 version = "1.0"
 features = ["derive"]
 
-[dependencies.reqwest]
-version = "0.11"
-features = ["json"]
+[dependencies.graphql_client]
+version = "0.10"
+features = ["reqwest"]

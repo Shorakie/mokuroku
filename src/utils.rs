@@ -1,25 +1,18 @@
-use lazy_static::lazy_static;
-use regex::Regex;
+use std::sync::Arc;
 
+use mongodm::prelude::MongoClient;
 use serenity::{
-    model::id::UserId,
+    client::bridge::gateway::ShardManager,
+    prelude::{Mutex, TypeMapKey},
 };
 
-// hello <@!136456456765431>
-// TODO: return Result
-pub fn extract_user_id(input: &str) -> Option<UserId> {
-    lazy_static! {
-        static ref RE: Regex = Regex::new(r"^<@!(?P<user_id>\d+)>$").unwrap();
-    }
-    let user_id = match RE.captures(input).and_then(|cap| {
-        cap.name("user_id").map(|user_id| user_id.as_str())
-    }) {
-        Some(user_id) => user_id,
-        None => return None,
-    };
+pub struct ShardManagerContainer;
+pub struct DatabaseContainer;
 
-    match user_id.parse::<u64>() {
-        Ok(user_id) => Some(user_id.into()),
-        Err(_) => None,
-    }
+impl TypeMapKey for ShardManagerContainer {
+    type Value = Arc<Mutex<ShardManager>>;
+}
+
+impl TypeMapKey for DatabaseContainer {
+    type Value = MongoClient;
 }

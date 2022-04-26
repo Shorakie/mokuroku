@@ -1,0 +1,33 @@
+query FindMedia($id: Int!, $media_type: MediaType) {
+  media: Media(id: $id, type: $media_type) {
+    id,
+    siteUrl,
+    title {
+      romaji,
+      english,
+      native,
+      userPreferred
+    },
+    format,
+    status(version:2),
+    genres,
+    startDate {
+      year,
+      month,
+      day
+    },
+    endDate {
+      year,
+      month,
+      day
+    },
+    coverImage {
+      medium,
+      large
+    },
+    duration,
+    episodes,
+    averageScore,
+    description(asHtml:true),
+  }
+}
