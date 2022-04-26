@@ -1,8 +1,9 @@
-use std::{env, fmt::Display};
+use std::fmt::Display;
 
 use crate::{
+    config::Config,
     embeds::{make_blank_embed, make_error_embed, make_success_embed},
-    utils::DatabaseContainer,
+    utils::{ConfigContainer, MongoContainer},
 };
 
 use anyhow::{Context, Result};
@@ -20,18 +21,23 @@ use serenity::{
 
 #[async_trait]
 pub trait ClientContextExt {
+    async fn get_config(&self) -> Config;
     async fn get_db(&self) -> MongoDatabase;
 }
 
 #[async_trait]
 impl ClientContextExt for client::Context {
+    async fn get_config(&self) -> Config {
+        let data = self.data.read().await;
+        data.get::<ConfigContainer>().unwrap().clone()
+    }
+
     async fn get_db(&self) -> MongoDatabase {
-        self.data
-            .read()
-            .await
-            .get::<DatabaseContainer>()
+        let data = self.data.read().await;
+        let config = data.get::<ConfigContainer>().unwrap().clone();
+        data.get::<MongoContainer>()
             .unwrap()
-            .database(env::var("MONGODB_NAME").as_deref().unwrap_or("mokuroku"))
+            .database(config.mongo_database.as_str())
     }
 }
 

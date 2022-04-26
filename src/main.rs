@@ -1,4 +1,5 @@
 pub mod commands;
+pub mod config;
 pub mod db;
 pub mod embeds;
 pub mod extentions;
@@ -10,8 +11,9 @@ pub mod utils;
 
 use crate::{
     commands::{anime::lookup::*, help::*},
+    config::Config,
     db::watchlist::WatchInfoCollConf,
-    utils::{DatabaseContainer, ShardManagerContainer},
+    utils::{ConfigContainer, MongoContainer, ShardManagerContainer},
 };
 
 use mongodm::{
@@ -34,7 +36,7 @@ use serenity::{
     utils::validate_token,
     Client,
 };
-use std::{collections::HashSet, env};
+use std::collections::HashSet;
 use tracing::{debug, error, info, instrument};
 
 struct Handler;
@@ -91,16 +93,7 @@ async fn main() {
     // reads RUST_LOG env
     tracing_subscriber::fmt::init();
 
-    let mongo_uri = env::var("MONGODB_URI").expect("Expected a MONGO_URI in the environment");
-    let mongo_database = env::var("MONGODB_NAME")
-        .as_deref()
-        .unwrap_or("mokuroku")
-        .to_owned();
-    let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
-    let prefix = env::var("BOT_PREFIX")
-        .as_deref()
-        .unwrap_or("mr~")
-        .to_owned();
+    let config = Config::from_env().expect("Failed to load config from environment");
 
     // Set gateway intents, which decides what events the bot will be notified about
     let intents = GatewayIntents::GUILD_MESSAGES
@@ -110,11 +103,10 @@ async fn main() {
         | GatewayIntents::DIRECT_MESSAGE_REACTIONS;
 
     // ensure token is valid
-    assert!(validate_token(&token).is_ok());
-
-    let http = Http::new(&token);
+    validate_token(&config.discord_token).expect("Discord token is not valid");
 
     // We will fetch your bot's owners and id
+    let http = Http::new(&config.discord_token);
     let (owners, _bot_id) = match http.get_current_application_info().await {
         Ok(info) => {
             let mut owners = HashSet::new();
@@ -125,33 +117,34 @@ async fn main() {
     };
 
     let framework = StandardFramework::new()
-        .configure(|c| c.owners(owners).prefix(prefix))
+        .configure(|c| c.owners(owners).prefix(&config.command_prefix))
         .before(before)
         .after(after)
         .group(&GENERAL_GROUP);
 
-    let mut client = Client::builder(&token, intents)
+    let mut client = Client::builder(&config.discord_token, intents)
         .framework(framework)
         .event_handler(Handler)
         .await
         .expect("Error creating client");
 
     // initiate mongo client
-    let mongo_options = MongoClientOptions::parse(mongo_uri)
+    let mongo_options = MongoClientOptions::parse(&config.mongo_uri)
         .await
         .expect("Couldn't parse the Mongo URI");
     let mongo =
         MongoClient::with_options(mongo_options).expect("Couldn't instantiate mongo client");
 
     // sync mongo indexes
-    sync_indexes::<WatchInfoCollConf>(&mongo.database(&mongo_database))
+    sync_indexes::<WatchInfoCollConf>(&mongo.database(config.mongo_database.as_str()))
         .await
         .expect("Can not sync indexes for Watchinfo collection");
 
     {
         let mut data = client.data.write().await;
         data.insert::<ShardManagerContainer>(client.shard_manager.clone());
-        data.insert::<DatabaseContainer>(mongo.clone());
+        data.insert::<MongoContainer>(mongo.clone());
+        data.insert::<ConfigContainer>(config.clone());
     }
 
     let shard_manager = client.shard_manager.clone();
