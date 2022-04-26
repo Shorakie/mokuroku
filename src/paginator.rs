@@ -1,10 +1,12 @@
 use std::cmp::max;
 
-use crate::graphql::{
-    lookup_media_page::{self, MediaType},
-    LookupMediaPage,
+use crate::{
+    config,
+    graphql::{
+        lookup_media_page::{self, MediaType},
+        LookupMediaPage,
+    },
 };
-use crate::strings::url::ANILIST_API;
 
 use graphql_client::reqwest::post_graphql;
 use reqwest::Client;
@@ -63,9 +65,12 @@ impl MediaPaginator {
         let client = Client::new();
 
         // Query from ANILIST_API
-        let response =
-            post_graphql::<LookupMediaPage, _>(&client, ANILIST_API, self.variables.clone())
-                .await?;
+        let response = post_graphql::<LookupMediaPage, _>(
+            &client,
+            config::ANILIST_API,
+            self.variables.clone(),
+        )
+        .await?;
 
         // Check for errors
         if let Some(errors) = response.errors {

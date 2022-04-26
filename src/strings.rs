@@ -1,7 +1,3 @@
-pub mod url {
-    pub const ANILIST_API: &str = "https://graphql.anilist.co/";
-}
-
 pub mod card {
     pub const STATUS: &str = "⌛ Status";
     pub const FORMAT: &str = "📂 Format";
