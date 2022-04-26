@@ -4,6 +4,7 @@ use serenity::{
     prelude::*,
 };
 
+// TODO: correct help message
 const HELP_MESSAGE: &str = "
 Hello there, Human!
 You have summoned me. Let's see about getting you what you need.

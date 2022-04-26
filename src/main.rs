@@ -1,30 +1,41 @@
-/*
- * Copyright (c) Facebook, Inc. and its affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
-mod commands;
+pub mod commands;
+pub mod db;
+pub mod embeds;
+pub mod extentions;
+pub mod graphql;
+pub mod paginator;
+pub mod strings;
+pub mod tests;
+pub mod utils;
 
-use std::{collections::HashSet, env, sync::Arc};
-
-use commands::{help::*};
-use serenity::{
-    async_trait,
-    client::{bridge::gateway::ShardManager, validate_token},
-    framework::{standard::macros::group, StandardFramework},
-    http::Http,
-    model::{event::ResumedEvent, gateway::Ready},
-    prelude::*,
+use crate::{
+    commands::{anime::lookup::*, help::*},
+    db::watchlist::WatchInfoCollConf,
+    utils::{DatabaseContainer, ShardManagerContainer},
 };
 
-use tracing::{error, info};
-
-pub struct ShardManagerContainer;
-
-impl TypeMapKey for ShardManagerContainer {
-    type Value = Arc<Mutex<ShardManager>>;
-}
+use mongodm::{
+    prelude::{MongoClient, MongoClientOptions},
+    sync_indexes,
+};
+use serenity::{
+    async_trait,
+    client::EventHandler,
+    framework::{
+        standard::{
+            macros::{group, hook},
+            CommandError,
+        },
+        StandardFramework,
+    },
+    http::Http,
+    model::{channel::Message, event::ResumedEvent, gateway::Ready},
+    prelude::{Context, GatewayIntents},
+    utils::validate_token,
+    Client,
+};
+use std::{collections::HashSet, env};
+use tracing::{debug, error, info, instrument};
 
 struct Handler;
 
@@ -34,16 +45,45 @@ impl EventHandler for Handler {
         info!("Connected as {}!", ready.user.name);
     }
 
-    async fn resume(&self, _: Context, _: ResumedEvent) {
-        info!("Resumed");
+    #[instrument(skip(self, _ctx))]
+    async fn resume(&self, _ctx: Context, resume: ResumedEvent) {
+        debug!("Resumed; trace: {:?}", resume.trace);
     }
 }
 
 #[group]
-#[commands(help)]
+#[commands(help, lookup)]
 struct General;
 
+#[hook]
+#[instrument]
+async fn after(_: &Context, msg: &Message, cmd_name: &str, error: Result<(), CommandError>) {
+    if let Err(why) = error {
+        error!(
+            "Error in {} invoked by {} from {}@{}: {:?}",
+            cmd_name,
+            msg.author.tag(),
+            msg.channel_id,
+            msg.guild_id
+                .map_or("private".to_owned(), |id| id.0.to_string()),
+            why
+        );
+    }
+}
+
+#[hook]
+#[instrument]
+async fn before(_: &Context, msg: &Message, command_name: &str) -> bool {
+    info!(
+        "Got command '{}' by user '{}'",
+        command_name,
+        msg.author.tag()
+    );
+    true
+}
+
 #[tokio::main]
+#[instrument]
 async fn main() {
     // load .env file
     dotenv::dotenv().expect("Failed to load .env file");
@@ -51,48 +91,76 @@ async fn main() {
     // reads RUST_LOG env
     tracing_subscriber::fmt::init();
 
-    let token = env::var("DISCORD_TOKEN")
-        .expect("Expected a token in the environment");
+    let mongo_uri = env::var("MONGODB_URI").expect("Expected a MONGO_URI in the environment");
+    let mongo_database = env::var("MONGODB_NAME")
+        .as_deref()
+        .unwrap_or("mokuroku")
+        .to_owned();
+    let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
+    let prefix = env::var("BOT_PREFIX")
+        .as_deref()
+        .unwrap_or("mr~")
+        .to_owned();
+
+    // Set gateway intents, which decides what events the bot will be notified about
+    let intents = GatewayIntents::GUILD_MESSAGES
+        | GatewayIntents::DIRECT_MESSAGES
+        | GatewayIntents::MESSAGE_CONTENT
+        | GatewayIntents::GUILD_MESSAGE_REACTIONS
+        | GatewayIntents::DIRECT_MESSAGE_REACTIONS;
 
     // ensure token is valid
     assert!(validate_token(&token).is_ok());
 
-    let http = Http::new_with_token(&token);
+    let http = Http::new(&token);
 
     // We will fetch your bot's owners and id
     let (owners, _bot_id) = match http.get_current_application_info().await {
         Ok(info) => {
             let mut owners = HashSet::new();
             owners.insert(info.owner.id);
-
             (owners, info.id)
-        },
+        }
         Err(why) => panic!("Could not access application info: {:?}", why),
     };
 
     let framework = StandardFramework::new()
-        .configure(
-            |c| c.owners(owners)
-            .prefix("mr!")
-        )
+        .configure(|c| c.owners(owners).prefix(prefix))
+        .before(before)
+        .after(after)
         .group(&GENERAL_GROUP);
 
-    let mut client = Client::builder(&token)
+    let mut client = Client::builder(&token, intents)
         .framework(framework)
         .event_handler(Handler)
         .await
         .expect("Error creating client");
-    
+
+    // initiate mongo client
+    let mongo_options = MongoClientOptions::parse(mongo_uri)
+        .await
+        .expect("Couldn't parse the Mongo URI");
+    let mongo =
+        MongoClient::with_options(mongo_options).expect("Couldn't instantiate mongo client");
+
+    // sync mongo indexes
+    sync_indexes::<WatchInfoCollConf>(&mongo.database(&mongo_database))
+        .await
+        .expect("Can not sync indexes for Watchinfo collection");
+
     {
         let mut data = client.data.write().await;
         data.insert::<ShardManagerContainer>(client.shard_manager.clone());
+        data.insert::<DatabaseContainer>(mongo.clone());
     }
 
     let shard_manager = client.shard_manager.clone();
 
     // listen for Ctrl+C
     tokio::spawn(async move {
-        tokio::signal::ctrl_c().await.expect("Could not register Ctrl+C handler");
+        tokio::signal::ctrl_c()
+            .await
+            .expect("Could not register Ctrl+C handler");
         info!("Shuting down all shards...");
         shard_manager.lock().await.shutdown_all().await;
     });
