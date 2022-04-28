@@ -95,15 +95,15 @@ async fn main() {
 
     let config = Config::from_env().expect("Failed to load config from environment");
 
+    // ensure token is valid
+    validate_token(&config.discord_token).expect("Discord token is not valid");
+
     // Set gateway intents, which decides what events the bot will be notified about
     let intents = GatewayIntents::GUILD_MESSAGES
         | GatewayIntents::DIRECT_MESSAGES
         | GatewayIntents::MESSAGE_CONTENT
         | GatewayIntents::GUILD_MESSAGE_REACTIONS
         | GatewayIntents::DIRECT_MESSAGE_REACTIONS;
-
-    // ensure token is valid
-    validate_token(&config.discord_token).expect("Discord token is not valid");
 
     // We will fetch your bot's owners and id
     let http = Http::new(&config.discord_token);

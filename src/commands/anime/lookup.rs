@@ -13,8 +13,8 @@ use serenity::{
 use crate::{
     db::watchlist::{WatchInfo, WatchListCollectionExt},
     extentions::{ClientContextExt, MessageComponentInteractionExt},
-    graphql::lookup_media_page::Variables,
-    paginator::MediaPaginator,
+    graphql::lookup_media_page::MediaType,
+    paginator::{AsComponent, AsEmbed, EmbedPaginator, MediaPaginator},
 };
 
 #[command("anime")]
@@ -25,13 +25,9 @@ pub async fn lookup(ctx: &Context, msg: &Message, mut args: Args) -> CommandResu
     let anime_name = args.trimmed().quoted().rest();
 
     // query anime page 1
-    let mut media_paginator = MediaPaginator::new(Variables {
-        search: anime_name.to_owned(),
-        ..Variables::default()
-    })
-    .await?;
+    let mut media_paginator = MediaPaginator::new(anime_name.to_owned(), MediaType::Anime).await?;
 
-    let mut current_media = match media_paginator.current_page() {
+    let mut current_media = match media_paginator.current_item() {
         Some(media) => media,
         None => {
             msg.reply(&ctx.http, "Cannot find any anime...").await?;
@@ -43,8 +39,8 @@ pub async fn lookup(ctx: &Context, msg: &Message, mut args: Args) -> CommandResu
     let mut anime_card = msg
         .channel_id
         .send_message(&ctx.http, |m| {
-            m.set_embed(current_media.embed_card())
-                .components(|c| c.add_action_row(media_paginator.action_row()))
+            m.set_embed(current_media.as_embed())
+                .set_components(media_paginator.as_component())
         })
         .await?;
 
@@ -61,8 +57,8 @@ pub async fn lookup(ctx: &Context, msg: &Message, mut args: Args) -> CommandResu
         let (mut watch_info, mut template) = (None, None);
 
         match interaction.data.custom_id.as_str() {
-            "PREV_PAGE" => next_media = media_paginator.prev_page().await,
-            "NEXT_PAGE" => next_media = media_paginator.next_page().await,
+            "PREV_PAGE" => next_media = media_paginator.prev_item().await,
+            "NEXT_PAGE" => next_media = media_paginator.next_item().await,
             "WATCH" => {
                 (watch_info, template) = (
                     watch_info_repo
@@ -104,9 +100,8 @@ pub async fn lookup(ctx: &Context, msg: &Message, mut args: Args) -> CommandResu
                         .create_interaction_response(&ctx, |resp| {
                             resp.kind(InteractionResponseType::UpdateMessage)
                                 .interaction_response_data(|data| {
-                                    data.set_embed(current_media.embed_card()).components(|c| {
-                                        c.add_action_row(media_paginator.action_row())
-                                    })
+                                    data.set_embed(current_media.as_embed())
+                                        .set_components(media_paginator.as_component())
                                 })
                         })
                         .await?;

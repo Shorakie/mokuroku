@@ -5,7 +5,7 @@ use html2md::parse_html;
 use mongodm::prelude::Bson;
 use serenity::{builder::CreateEmbed, utils::Colour};
 
-use crate::strings::card;
+use crate::{paginator::AsEmbed, strings::card};
 
 #[derive(GraphQLQuery)]
 #[graphql(
@@ -16,17 +16,6 @@ use crate::strings::card;
     response_derives = "Debug,Clone,PartialEq,Eq"
 )]
 pub struct LookupMediaPage;
-
-impl Default for lookup_media_page::Variables {
-    fn default() -> Self {
-        Self {
-            media_type: lookup_media_page::MediaType::Anime,
-            page: 1,
-            per_page: None,
-            search: "".to_owned(),
-        }
-    }
-}
 
 impl Default for lookup_media_page::LookupMediaPagePagePageInfo {
     fn default() -> Self {
@@ -132,8 +121,10 @@ impl lookup_media_page::LookupMediaPagePageMedia {
             .or(title.native)
             .unwrap_or_else(|| "?".to_owned())
     }
+}
 
-    pub fn embed_card(&self) -> CreateEmbed {
+impl AsEmbed for lookup_media_page::LookupMediaPagePageMedia {
+    fn as_embed(&self) -> CreateEmbed {
         let mut embed = CreateEmbed::default();
         embed.title(self.get_title());
         embed.color(Colour::new(0x345A78));
