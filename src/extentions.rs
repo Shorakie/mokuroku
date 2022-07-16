@@ -57,8 +57,7 @@ impl ChannelIdExt for ChannelId {
         let embed = make_blank_embed(|e| {
             build(e);
             e
-        })
-        .await;
+        });
         self.send_message(&ctx, |m| m.set_embed(embed))
             .await
             .context("Failed to send embed message")
@@ -101,7 +100,7 @@ impl MessageComponentInteractionExt for MessageComponentInteraction {
         ctx: &client::Context,
         s: impl Display + Send + Sync + 'static,
     ) -> Result<()> {
-        let embed = make_error_embed(|e| e.description(s)).await;
+        let embed = make_error_embed(|e| e.description(s));
         self.create_interaction_response(&ctx, |resp| {
             resp.kind(InteractionResponseType::ChannelMessageWithSource);
             resp.interaction_response_data(|data| {
@@ -119,7 +118,7 @@ impl MessageComponentInteractionExt for MessageComponentInteraction {
         s: impl Display + Send + Sync + 'static,
         title: impl Display + Send + Sync + 'static,
     ) -> Result<()> {
-        let embed = make_success_embed(|e| e.description(s).title(title)).await;
+        let embed = make_success_embed(|e| e.description(s).title(title));
 
         self.create_interaction_response(&ctx, |resp| {
             resp.kind(InteractionResponseType::ChannelMessageWithSource);

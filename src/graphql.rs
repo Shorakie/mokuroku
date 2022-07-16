@@ -1,8 +1,9 @@
 use std::fmt;
 
+use chrono::NaiveDate;
 use graphql_client::GraphQLQuery;
 use html2md::parse_html;
-use mongodm::prelude::Bson;
+use mongodm::prelude::{Bson, BsonDateTime};
 use serenity::{builder::CreateEmbed, utils::Colour};
 
 use crate::{paginator::AsEmbed, strings::card};
@@ -83,6 +84,19 @@ impl fmt::Display for lookup_media_page::LookupMediaPagePageMediaStartDate {
                 self.year.unwrap()
             ),
         }
+    }
+}
+
+impl From<lookup_media_page::LookupMediaPagePageMediaStartDate> for Bson {
+    fn from(val: lookup_media_page::LookupMediaPagePageMediaStartDate) -> Self {
+        if let (Some(year), Some(month), Some(day)) = (val.year, val.month, val.day) {
+            return NaiveDate::from_ymd_opt(year as i32, month as u32, day as u32)
+                .map(|date| date.and_hms(0, 0, 0))
+                .map_or(Bson::Null, |datetime| {
+                    Bson::DateTime(BsonDateTime::from_millis(datetime.timestamp_millis()))
+                });
+        }
+        Bson::Null
     }
 }
 

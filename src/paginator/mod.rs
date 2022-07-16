@@ -1,5 +1,7 @@
 mod media_paginator;
+mod mediatrack_paginator;
 pub use media_paginator::MediaPaginator;
+// pub use media_track_paginator;
 
 use anyhow::Result;
 use serenity::{
@@ -18,7 +20,7 @@ pub trait AsComponent {
 
 #[async_trait]
 pub trait EmbedPaginator {
-    type Item: AsEmbed;
+    type Item;
     type Page;
 
     async fn get_page(&self, page: usize) -> Result<Self::Page>;

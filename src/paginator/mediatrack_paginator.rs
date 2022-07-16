@@ -2,16 +2,21 @@ use std::cmp::max;
 
 use anyhow::{bail, Result};
 use graphql_client::reqwest::post_graphql;
+use mongodm::prelude::MongoCollection;
 use reqwest::Client;
 use serenity::{
     async_trait,
     builder::{CreateActionRow, CreateButton},
-    model::interactions::message_component::ButtonStyle,
+    model::{id::UserId, interactions::message_component::ButtonStyle},
 };
 use tracing::{error, info};
 
 use crate::{
     config,
+    db::{
+        mediatrack::{MediaTrack, MediaTrackSeason},
+        watchlist::{WatchInfo, WatchStatus},
+    },
     graphql::{
         lookup_media_page::{
             self, LookupMediaPagePage as MediaPage, LookupMediaPagePageMedia as Media,
@@ -23,7 +28,13 @@ use crate::{
 
 use super::EmbedPaginator;
 
-pub struct MediaPaginator {
+#[derive(Default, Builder)]
+pub struct MediaTrackPaginatorOptions {
+    media_switch: bool,
+    suggestion_toggle: bool,
+}
+
+pub struct MediaTrackPaginator {
     items: Vec<Media>,
     index: usize,
     // write only, used for quering graphql
@@ -32,67 +43,27 @@ pub struct MediaPaginator {
     page_info: PageInfo,
 }
 
-impl MediaPaginator {
-    pub async fn new(search: String, media_type: MediaType) -> Result<Self> {
-        let mut paginator = Self {
-            items: vec![],
-            index: 0,
-            page_info: PageInfo::default(),
-            query_variables: lookup_media_page::Variables {
-                search,
-                page: 1,
-                media_type,
-                per_page: Some(5),
-            },
-        };
-        let page = paginator
-            .get_page(paginator.query_variables.page as usize)
-            .await?;
-        paginator.page_info = page.page_info.unwrap_or_default();
-        paginator.items = page.media.unwrap().into_iter().flatten().collect();
-        Ok(paginator)
+impl MediaTrackPaginator {
+    pub async fn new(
+        collection: MongoCollection<WatchInfo>,
+        user_id: UserId,
+        watch_status: impl IntoIterator<Item = WatchStatus>,
+        media_type: impl IntoIterator<Item = MediaType>,
+        suggests: Option<bool>,
+    ) -> Result<Self> {
+        todo!()
     }
 }
 
 #[async_trait]
-impl EmbedPaginator for MediaPaginator {
-    type Item = Media;
-    type Page = MediaPage;
+impl EmbedPaginator for MediaTrackPaginator {
+    type Item = MediaTrackSeason;
+    type Page = Vec<Self::Item>;
 
     async fn get_page(&self, page: usize) -> Result<Self::Page> {
-        info!(
-            "querying page {} of {} {}",
-            &page,
-            &self.query_variables.search,
-            match self.query_variables.media_type {
-                MediaType::Anime => "Anime",
-                MediaType::Manga => "Manga",
-                _ => "unknown type",
-            }
-        );
+        info!("querying page of");
 
-        let client = Client::new();
-
-        // Query from ANILIST_API
-        let response = post_graphql::<LookupMediaPage, _>(
-            &client,
-            config::ANILIST_API,
-            // self.query_variables.clone()
-            lookup_media_page::Variables {
-                page: page as i64,
-                ..self.query_variables.clone()
-            },
-        )
-        .await?;
-
-        // Check for errors
-        if let Some(errors) = response.errors {
-            error!("GraphQL errors: {:?}", errors);
-            bail!("GraphQL Error");
-        }
-
-        // get the page
-        Ok(response.data.unwrap().page.unwrap())
+        todo!();
     }
 
     fn has_next(&self) -> bool {
@@ -114,6 +85,9 @@ impl EmbedPaginator for MediaPaginator {
 
         self.index += 1;
         if self.index >= self.items.len() {
+            if !self.page_info.has_next_page {
+                return None;
+            }
             self.query_variables.page += 1;
 
             let page = self
@@ -157,6 +131,12 @@ impl EmbedPaginator for MediaPaginator {
                 .style(ButtonStyle::Primary)
                 .custom_id("WATCH")
                 .emoji('👀')
+                .disabled(
+                    !self
+                        .current_item()
+                        .map(|media| media.has_start_date())
+                        .unwrap_or(false),
+                )
                 .to_owned(),
         );
         action_row.add_button(
@@ -164,6 +144,12 @@ impl EmbedPaginator for MediaPaginator {
                 .style(ButtonStyle::Primary)
                 .custom_id("FINISH")
                 .emoji('🏁')
+                .disabled(
+                    !self
+                        .current_item()
+                        .map(|media| media.has_start_date())
+                        .unwrap_or(false),
+                )
                 .to_owned(),
         );
         action_row.add_button(

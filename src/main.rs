@@ -10,7 +10,10 @@ pub mod tests;
 pub mod utils;
 
 use crate::{
-    commands::{anime::lookup::*, help::*},
+    commands::{
+        anime::{lookup::*, watchlist::*},
+        help::*,
+    },
     config::Config,
     db::watchlist::WatchInfoCollConf,
     utils::{ConfigContainer, MongoContainer, ShardManagerContainer},
@@ -54,7 +57,7 @@ impl EventHandler for Handler {
 }
 
 #[group]
-#[commands(help, lookup)]
+#[commands(help, lookup, watching)]
 struct General;
 
 #[hook]

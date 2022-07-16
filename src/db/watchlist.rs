@@ -23,11 +23,19 @@ impl CollectionConfig for WatchInfoCollConf {
     }
 
     fn indexes() -> Indexes {
-        Indexes::new().with(
-            Index::new("anilist_media_id")
-                .with_key("discord_user_id")
-                .with_option(IndexOption::Unique),
-        )
+        Indexes::new()
+            .with(
+                Index::new("anilist_media_id")
+                    .with_key("discord_user_id")
+                    .with_option(IndexOption::Unique),
+            )
+            .with(
+                Index::new("discord_user_id")
+                    .with_key_with_direction("start_date", mongodm::SortOrder::Descending)
+                    .with_key("watch_status")
+                    .with_key("media_type"),
+            )
+            .with(Index::new("discord_user_id").with_key("suggests"))
     }
 }
 
@@ -44,6 +52,8 @@ pub struct WatchInfo {
     pub anilist_media_id: i64,
     pub discord_user_id: UserId,
     pub media_type: MediaType,
+    pub start_date: Option<BsonDateTime>,
+    pub title: String,
     pub watch_status: WatchStatus,
     pub last_watch_status: WatchStatus,
     pub suggests: bool,
@@ -124,7 +134,9 @@ impl WatchListCollectionExt for MongoCollection<WatchInfo> {
                 doc! { Set: {
                     "temp": "$last_watch_status",
                     "last_watch_status": "$watch_status",
-                    "updated_at": "$$NOW" ,
+                    "updated_at": "$$NOW",
+                    "title": media.get_title(),
+                    "start_date": media.start_date.clone().map_or(Bson::Null, |date| date.into())
                 } },
                 doc! { Set: {
                     "watch_status": {
@@ -162,7 +174,9 @@ impl WatchListCollectionExt for MongoCollection<WatchInfo> {
                 doc! { Set: {
                     "temp": "$last_watch_status",
                     "last_watch_status": "$watch_status",
-                    "updated_at": "$$NOW" ,
+                    "updated_at": "$$NOW",
+                    "title": media.get_title(),
+                    "start_date": media.start_date.clone().map_or(Bson::Null, |date| date.into())
                 } },
                 doc! { Set: {
                     "watch_status": {
@@ -197,7 +211,12 @@ impl WatchListCollectionExt for MongoCollection<WatchInfo> {
         self.find_one_and_update(
             doc! {"anilist_media_id": media.id, "discord_user_id": to_bson(user_id.as_u64()).unwrap()},
             vec![
-                doc! { Set: { "suggests": { Not: "$suggests" }, "updated_at": "$$NOW" }, },
+                doc! { Set: {
+                    "suggests": { Not: "$suggests" },
+                    "updated_at": "$$NOW",
+                    "title": media.get_title(),
+                    "start_date": media.start_date.clone().map_or(Bson::Null, |date| date.into())
+                } },
                 doc! { ReplaceWith: { MergeObjects:[
                     {
                         "created_at": "$$NOW",
