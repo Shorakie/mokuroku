@@ -1,2 +1,1 @@
-pub mod anime;
-pub mod help;
+pub mod media;

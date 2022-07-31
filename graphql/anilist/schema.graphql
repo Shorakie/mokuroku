@@ -4070,19 +4070,19 @@ type PageInfo {
   """
   The total number of items. Note: This value is not guaranteed to be accurate, do not rely on this for logic
   """
-  total: Int!
+  total: Int
 
   """The count on a page"""
-  perPage: Int!
+  perPage: Int
 
   """The current page"""
-  currentPage: Int!
+  currentPage: Int
 
   """The last page"""
-  lastPage: Int!
+  lastPage: Int
 
   """If there is another page"""
-  hasNextPage: Boolean!
+  hasNextPage: Boolean
 }
 
 """Provides the parsed markdown as html"""
