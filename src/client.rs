@@ -1,13 +1,13 @@
 use crate::events::Handler;
 use std::collections::HashSet;
 
-use eyre::{bail, ensure, eyre, Result};
+use config::ConfigError;
+use eyre::{bail, eyre, Result};
 use serenity::{
     framework::{standard::macros::group, StandardFramework},
     http::Http,
     model::id::{ApplicationId, UserId},
     prelude::{Client as SerenityClient, GatewayIntents},
-    utils::validate_token,
 };
 use tracing::{info, warn};
 
@@ -24,18 +24,13 @@ pub struct Client {
 
 impl Client {
     pub async fn new() -> Result<Client> {
-        let config = match envy::from_env::<Configuration>() {
+        let config = match Configuration::new() {
             Ok(config) => config,
-            Err(envy::Error::MissingValue(variable)) => {
-                bail!("missing environment variable: {variable}.")
+            Err(ConfigError::NotFound(variable)) => {
+                bail!("⚠️Missing environment variable: {variable}.")
             }
-            Err(_) => bail!("failed to load environment variables."),
+            _ => bail!("Failed to load environment variables."),
         };
-
-        ensure!(
-            validate_token(&config.discord_token).is_ok(),
-            "Discord token is not valid"
-        );
 
         // Set gateway intents, which decides what events the bot will be notified about
         let intents = GatewayIntents::GUILD_MESSAGES
@@ -62,7 +57,7 @@ impl Client {
             .configure(|c| c.owners(owners).prefix(&config.command_prefix))
             .group(&MEDIA_GROUP);
 
-        let client = SerenityClient::builder(&config.discord_token, intents)
+        let client = SerenityClient::builder(&config.discord.token, intents)
             .framework(framework)
             .event_handler(Handler)
             .await?;
@@ -88,7 +83,7 @@ impl Client {
     }
 
     pub async fn get_bot_info(config: &Configuration) -> Result<(HashSet<UserId>, ApplicationId)> {
-        let http = Http::new(&config.discord_token);
+        let http = Http::new(&config.discord.token);
         match http.get_current_application_info().await {
             Ok(info) => {
                 let mut owners = HashSet::new();
@@ -109,7 +104,8 @@ impl Client {
                 warn!("trying environment variable for bot id");
 
                 let bot_id = config
-                    .discord_bot_id
+                    .discord
+                    .bot_id
                     .ok_or_else(|| eyre!("Unable to find DISCORD_BOT_ID environment variable."))?;
                 Ok((HashSet::new(), bot_id))
             }
